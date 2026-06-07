@@ -62,6 +62,13 @@ Cada regla de negocio crítica DEBE tener al menos una prueba unitaria.
 - Seguir convenciones de nomenclatura estándar de C#: PascalCase para clases y
   métodos, camelCase para parámetros y variables locales.
 
+## VII. Test-Driven Development
+
+- All business logic must be implemented using TDD.
+- Tests are written before production code.
+- Follow Red-Green-Refactor cycle.
+- No implementation task may start until a failing test exists.
+
 ## Estándares técnicos
 
 - **Runtime**: .NET 8.0+
