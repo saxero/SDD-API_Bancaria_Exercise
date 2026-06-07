@@ -1,24 +1,24 @@
-# API Contract: Banking REST API
+# API Contracts: Banking REST API Mínima
 
-**Base URL**: `http://localhost:5000`
+**Base URL**: `http://localhost:5000` (configurable via `ASPNETCORE_URLS`)
 
 **Content-Type**: `application/json`
 
-**Error format**: `{ "error": "mensaje descriptivo" }`
+**OpenAPI**: Available at `/swagger` via Swagger UI
 
 ---
 
-## GET /accounts/{id}/balance
+## GET /api/accounts/{accountId}/balance
 
-Consulta el saldo de una cuenta.
+Retrieve the current balance of a specific account.
 
 ### Request
 
-| Parámetro | Tipo | Ubicación | Requerido | Descripción |
-|-----------|------|-----------|-----------|-------------|
-| `id` | `string` | Path | Sí | ID de cuenta (ej: ACC-001) |
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `accountId` | Path | `string` | Yes | Account identifier (e.g., ACC-001) |
 
-### Response 200 OK
+### Response: 200 OK
 
 ```json
 {
@@ -27,29 +27,29 @@ Consulta el saldo de una cuenta.
 }
 ```
 
-### Response 400 Bad Request
+### Response: 404 Not Found
 
 ```json
 {
-  "error": "El ID de cuenta es inválido"
+  "error": "La cuenta ACC-999 no existe"
 }
 ```
 
-### Response 404 Not Found
+### Response: 400 Bad Request
 
 ```json
 {
-  "error": "Cuenta no encontrada: ACC-999"
+  "error": "El ID de cuenta es requerido"
 }
 ```
 
 ---
 
-## POST /transfers
+## POST /api/transfers
 
-Transfiere dinero entre dos cuentas.
+Transfer money between two accounts.
 
-### Request Body
+### Request
 
 ```json
 {
@@ -59,57 +59,62 @@ Transfiere dinero entre dos cuentas.
 }
 ```
 
-| Campo | Tipo | Requerido | Descripción |
-|-------|------|-----------|-------------|
-| `source` | `string` | Sí | ID de cuenta origen |
-| `target` | `string` | Sí | ID de cuenta destino |
-| `amount` | `decimal` | Sí | Monto a transferir (> 0) |
+### Response: 200 OK
 
-### Response 200 OK
+Source and target account balances after successful transfer.
 
 ```json
 {
   "message": "Transferencia exitosa",
-  "source": "ACC-001",
-  "target": "ACC-002",
-  "amount": 300.00
+  "source": {
+    "accountId": "ACC-001",
+    "balance": 700.00
+  },
+  "target": {
+    "accountId": "ACC-002",
+    "balance": 800.00
+  }
 }
 ```
 
-### Response 400 Bad Request — Monto inválido
+### Response: 400 Bad Request — Validation Errors
 
 ```json
-{
-  "error": "El monto debe ser mayor a cero"
-}
+{ "error": "El monto debe ser mayor a cero" }
 ```
 
-### Response 400 Bad Request — Misma cuenta
+| Scenario | Error Message |
+|---|---|
+| Source == Target | "La cuenta origen y destino deben ser diferentes" |
+| Amount <= 0 | "El monto debe ser mayor a cero" |
+| Amount null/missing | "El monto es requerido" |
+| Source null/missing | "La cuenta origen es requerida" |
+| Target null/missing | "La cuenta destino es requerida" |
+| Insufficient balance | "Saldo insuficiente" |
+| Source account not found | "La cuenta origen no existe" |
+| Target account not found | "La cuenta destino no existe" |
+| Malformed JSON body | "Solicitud inválida" |
 
-```json
-{
-  "error": "No se puede transferir a la misma cuenta"
-}
-```
+### Response: 404 Not Found
 
-### Response 400 Bad Request — Saldo insuficiente
-
-```json
-{
-  "error": "Saldo insuficiente"
-}
-```
-
-### Response 404 Not Found — Cuenta no existe
-
-```json
-{
-  "error": "Cuenta origen no encontrada: ACC-999"
-}
-```
+Not applicable for this endpoint — business rule violations return 400.
 
 ---
 
-## Swagger UI
+## Error Response Schema
 
-Disponible en `http://localhost:5000/swagger` en entorno Development.
+All errors share a uniform shape:
+
+```json
+{
+  "error": "Descripción del error en español"
+}
+```
+
+## HTTP Status Code Usage
+
+| Code | When |
+|---|---|
+| `200 OK` | Successful balance query or transfer |
+| `400 Bad Request` | Any validation failure (input or business rule) |
+| `404 Not Found` | Account ID does not exist in store |

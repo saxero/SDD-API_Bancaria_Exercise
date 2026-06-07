@@ -1,68 +1,57 @@
-# Quickstart: Banking REST API
+# Quickstart: Banking REST API Mínima
 
-## Requisitos
+## Prerequisites
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-- Git (opcional)
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) (or later)
 
-## Construir y ejecutar
+## Build
 
 ```bash
-# Ir al directorio del proyecto
-cd src/BankingApi
-
-# Restaurar dependencias
-dotnet restore
-
-# Ejecutar en modo Development (Swagger habilitado)
-dotnet run
-
-# El servidor inicia en http://localhost:5000
-# Swagger UI: http://localhost:5000/swagger
+dotnet build
 ```
 
-## Ejecutar pruebas
+Builds both `src/BankingApi/` and `src/BankingApi.Tests/`.
+
+## Run
 
 ```bash
-# Desde la raíz del repositorio
-dotnet test src/BankingApi.Tests/BankingApi.Tests.csproj
+dotnet run --project src/BankingApi/
+```
 
-# O desde cualquier directorio
+Server starts on `http://localhost:5000` by default.
+
+## Test
+
+```bash
 dotnet test
 ```
 
-## Ejemplos de uso (curl)
+Runs all xUnit tests from `src/BankingApi.Tests/`.
 
-### Consultar saldo
+## Explore API
 
-```bash
-curl http://localhost:5000/accounts/ACC-001/balance
-```
+Open Swagger UI: [http://localhost:5000/swagger](http://localhost:5000/swagger)
 
-### Transferencia exitosa
+## Manual Smoke Test
 
 ```bash
-curl -X POST http://localhost:5000/transfers \
+# Get balance
+curl http://localhost:5000/api/accounts/ACC-001/balance
+
+# Transfer $300 from ACC-001 to ACC-002
+curl -X POST http://localhost:5000/api/transfers \
   -H "Content-Type: application/json" \
-  -d '{"source":"ACC-001","target":"ACC-002","amount":300.00}'
+  -d "{\"source\":\"ACC-001\",\"target\":\"ACC-002\",\"amount\":300.00}"
+
+# Verify updated balances
+curl http://localhost:5000/api/accounts/ACC-001/balance
+curl http://localhost:5000/api/accounts/ACC-002/balance
 ```
 
-### Transferencia rechazada (saldo insuficiente)
+## Endpoints
 
-```bash
-curl -X POST http://localhost:5000/transfers \
-  -H "Content-Type: application/json" \
-  -d '{"source":"ACC-001","target":"ACC-002","amount":99999.00}'
-```
-
-## Datos semilla
-
-Al iniciar, el sistema precarga 3 cuentas:
-
-| Cuenta | Saldo |
-|--------|-------|
-| ACC-001 | $1000.00 |
-| ACC-002 | $500.00 |
-| ACC-003 | $0.00 |
-
-Al reiniciar el servidor, los saldos vuelven a estos valores.
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/accounts/{accountId}/balance` | Get account balance |
+| POST | `/api/transfers` | Transfer between accounts |
+| GET | `/swagger` | Swagger UI |

@@ -1,64 +1,123 @@
-# Data Model: Banking REST API
+# Data Model: Banking REST API Mínima
 
-## Entidades
+**Date**: 2026-06-07 | **Status**: Complete
+
+## Entities
 
 ### Account
 
-| Campo | Tipo | Descripción | Restricciones |
-|-------|------|-------------|---------------|
-| `Id` | `string` | Identificador único de cuenta | Requerido, no vacío. Ej: `ACC-001` |
-| `Balance` | `decimal` | Saldo actual en USD | >= 0 |
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `AccountId` | `string` | PK, Required, Non-empty, Alphanumeric | Unique account identifier (e.g., ACC-001) |
+| `Balance` | `decimal` | Required, >= 0, 2 decimal places | Current account balance in USD |
 
-**Datos semilla**:
+**Seed Data**:
 
-| Id | Balance |
-|----|---------|
+| AccountId | Balance |
+|---|---|
 | ACC-001 | 1000.00 |
 | ACC-002 | 500.00 |
 | ACC-003 | 0.00 |
 
-### TransferRequest (DTO de entrada)
+**Invariant**: Balance must never be negative at rest. During transfer, source balance debited before credit (intermediate negative not possible since validation precedes mutation).
 
-| Campo | Tipo | Descripción | Restricciones |
-|-------|------|-------------|---------------|
-| `Source` | `string` | ID de cuenta origen | Requerido, debe existir |
-| `Target` | `string` | ID de cuenta destino | Requerido, debe existir, distinto de `Source` |
-| `Amount` | `decimal` | Monto a transferir | > 0 |
+---
 
-## Reglas de Validación (Reglas de Negocio)
+### TransferRequest (DTO — not persisted)
 
-Todas las validaciones se ejecutan en `BankingService.Transfer()` antes de modificar cualquier saldo.
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `Source` | `string` | Required, Non-empty, != Target | Source account ID |
+| `Target` | `string` | Required, Non-empty, != Source | Target account ID |
+| `Amount` | `decimal` | Required, > 0, 2 decimal places | Amount to transfer in USD |
 
-### R1 — Saldo insuficiente (FR-008)
-- **Condición**: `sourceAccount.Balance < request.Amount`
-- **Resultado**: Error `{ "error": "Saldo insuficiente" }`
-- **Código HTTP**: 400 Bad Request
+---
 
-### R2 — Monto inválido (FR-006)
-- **Condición**: `request.Amount <= 0`
-- **Resultado**: Error `{ "error": "El monto debe ser mayor a cero" }`
-- **Código HTTP**: 400 Bad Request
+### ApiError (DTO — response only)
 
-### R3 — Misma cuenta (FR-007)
-- **Condición**: `request.Source == request.Target`
-- **Resultado**: Error `{ "error": "No se puede transferir a la misma cuenta" }`
-- **Código HTTP**: 400 Bad Request
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `Error` | `string` | Required | Human-readable error message |
 
-### Validaciones adicionales
+---
 
-| Validación | Condición | Resultado | HTTP |
-|------------|-----------|-----------|------|
-| Cuenta origen no existe | `!accounts.ContainsKey(source)` | Error: cuenta origen no encontrada | 404 |
-| Cuenta destino no existe | `!accounts.ContainsKey(target)` | Error: cuenta destino no encontrada | 404 |
-| Formato ID inválido | `string.IsNullOrEmpty(id)` | Error: ID inválido | 400 |
+### BalanceResponse (DTO — response only)
 
-## Atomicidad de Transferencia
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `AccountId` | `string` | Required | Account identifier |
+| `Balance` | `decimal` | Required, >= 0 | Current balance |
 
-La modificación de saldos (origen: debitar, destino: acreditar) usa `ConcurrentDictionary.TryUpdate` con control cíclico:
+---
 
-1. Leer cuenta origen → validar saldo suficiente
-2. Restar monto a cuenta origen (`TryUpdate`)
-3. Sumar monto a cuenta destino (`TryUpdate`)
-4. Si falla algún paso, ninguna cuenta se modifica
+### TransferResponse (DTO — response only)
 
-Esto garantiza consistencia: el saldo total del sistema se conserva.
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `Message` | `string` | Required | Success confirmation message |
+| `Source` | `BalanceResponse` | Required | Source account post-transfer state |
+| `Target` | `BalanceResponse` | Required | Target account post-transfer state |
+
+---
+
+## Validation Rules
+
+### Business Rules (domain layer — BankingService)
+
+| Rule | Condition | Error Message |
+|---|---|---|
+| Source exists | Source account not found in store | "La cuenta origen no existe" |
+| Target exists | Target account not found in store | "La cuenta destino no existe" |
+| Different accounts | Source == Target | "La cuenta origen y destino deben ser diferentes" |
+| Amount positive | Amount <= 0 | "El monto debe ser mayor a cero" |
+| Sufficient balance | Source.Balance < Amount | "Saldo insuficiente" |
+
+### Input Validation (API layer — Program.cs)
+
+| Rule | Condition | Error Message |
+|---|---|---|
+| AccountId non-empty | accountId is null or empty | "El ID de cuenta es requerido" |
+| TransferRequest body valid | Body is null or malformed | "Solicitud inválida" |
+| Source field required | Source is null or empty | "La cuenta origen es requerida" |
+| Target field required | Target is null or empty | "La cuenta destino es requerida" |
+
+---
+
+## State Transitions
+
+### Transfer Lifecycle
+
+```
+[Request Received]
+       |
+       v
+[Validate Input] ──Failure──> [Return 400 Bad Request]
+       |
+      Success
+       |
+       v
+[Validate Business Rules] ──Failure──> [Return 400 Bad Request]
+       |
+      Success
+       |
+       v
+[Deduct Source.Balance -= Amount]
+       |
+       v
+[Add Target.Balance += Amount]
+       |
+       v
+[Return 200 OK with updated balances]
+```
+
+### Atomicity Guarantee
+
+Both balance updates MUST complete or neither. Implementation: lock on a composite key derived from both AccountId values (ordered by hash to prevent deadlock), then perform both modifications within the lock.
+
+---
+
+## Balance Invariant
+
+**Total Supply**: Sum of all account balances === constant ($1,500 seed total).
+
+Verified after every successful transfer by assertion in test code. Not enforced at runtime in production (lab environment — no concurrent external mutations possible).

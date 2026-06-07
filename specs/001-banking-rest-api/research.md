@@ -1,50 +1,68 @@
 # Research: Banking REST API Mínima
 
-## Decisiones Técnicas
+**Date**: 2026-06-07 | **Status**: Complete
 
-### Framework: .NET 9 Minimal APIs vs Controllers
+## Overview
 
-- **Decisión**: Minimal APIs
-- **Justificación**: Menos archivos, menos boilerplate, sin clases de Controller, sin routing por atributos. Todo en un `Program.cs` compacto. La API tiene solo 2 endpoints, no justifica la estructura de Controllers.
-- **Alternativas consideradas**: Controllers (más boilerplate para el mismo resultado), ASP.NET Core + MVC (sobreingeniería).
+All technical context was fully specified upfront. No NEEDS CLARIFICATION found. This document captures key decisions and rationale.
 
-### Documentación: Swashbuckle.AspNetCore vs OpenAPI nativo
+---
 
-- **Decisión**: Swashbuckle.AspNetCore v9.0.x
-- **Justificación**: Microsoft eliminó Swashbuckle del template por defecto en .NET 9, pero el paquete NuGet sigue soportando `net9.0` oficialmente (v9.0.0+). La configuración es idéntica a versiones anteriores. El usuario lo solicitó explícitamente.
-- **Alternativas consideradas**: `Microsoft.AspNetCore.OpenApi` (nativo, no requiere paquete externo, pero requiere `dotnet-getdocument` CLI para UI interactiva).
+## 1. API Framework: ASP.NET Core Minimal APIs
 
-### Almacenamiento: ConcurrentDictionary vs List<Account>
+- **Decision**: Use Minimal APIs (not MVC Controllers)
+- **Rationale**: Fewer files, less boilerplate, natural fit for 2-endpoint API. Aligns with KISS principle (Constitution I).
+- **Alternatives considered**: MVC Controllers (more ceremony, requires Controller base class, action methods, routing attributes — overkill for 2 endpoints)
 
-- **Decisión**: `ConcurrentDictionary<string, Account>`
-- **Justificación**: Thread-safe sin locks manuales. O(1) en búsqueda por ID. Semántica clara para actualización de saldos con `TryUpdate`.
-- **Alternativas consideradas**: `List<Account>` (requiere locks manuales), `Dictionary<string, Account>` (no thread-safe), `ImmutableDictionary` (nueva instancia en cada modificación).
+## 2. In-Memory Storage: ConcurrentDictionary
 
-### Estructura de archivos: 3 archivos planos vs 1 mega-archivo
+- **Decision**: `ConcurrentDictionary<string, Account>` registered as Singleton
+- **Rationale**: Thread-safe by default, simple API, no external dependencies. Meets spec requirement for volatile in-memory data.
+- **Alternatives considered**: `Dictionary` + `lock` (more error-prone), `ImmutableDictionary` (allocation overhead on every write)
 
-- **Decisión**: 3 archivos .cs (`Program.cs`, `Domain.cs`, `BankingApi.csproj`)
-- **Justificación**: Separación clara entre modelos/dominio (Domain.cs), endpoints/configuración (Program.cs), y metadatos del proyecto (.csproj). Suficiente para mantener el código legible sin fragmentar.
-- **Alternativas consideradas**: Todo en `Program.cs` (~200 líneas, difícil de leer), separación por carpetas (sobreingeniería para 2 endpoints).
+## 3. Testing: xUnit + FluentAssertions
 
-### Pruebas: xUnit sin mocks
+- **Decision**: xUnit v2 with FluentAssertions (optional per Constitution V)
+- **Rationale**: xUnit is the .NET standard. FluentAssertions improves test readability for balance assertions.
+- **Alternatives considered**: NUnit (less idiomatic in modern .NET), MSTest (less feature-rich assertions)
 
-- **Decisión**: xUnit v2, pruebas contra instancia real de `BankingService`
-- **Justificación**: `BankingService` no tiene dependencias externas (ni DB, ni HTTP, ni I/O). No hay nada que mockear. Las pruebas crean una instancia fresca, operan directamente y verifican saldos.
-- **Alternativas consideradas**: Moq (innecesario — no hay interfaces), NUnit (equivalente, pero xUnit es estándar en .NET).
+## 4. API Documentation: Swashbuckle (Swagger)
 
-### Validaciones: En dominio vs middleware/filtros
+- **Decision**: Swashbuckle.AspNetCore v9.x
+- **Rationale**: De facto standard for ASP.NET Core OpenAPI docs. Required by Constitution (VI).
+- **Alternatives considered**: NSwag (more features but heavier), Scalar (newer, less ecosystem support)
 
-- **Decisión**: Validación en `BankingService.Transfer()`
-- **Justificación**: Las reglas de negocio (saldo insuficiente, monto inválido, misma cuenta) pertenecen al dominio. El endpoint solo traduce el resultado HTTP.
-- **Alternativas consideradas**: FluentValidation (descartado por restricción), Data Annotations (solo validación de formato, no de negocio), middleware de validación (separa la regla del dominio).
+## 5. Error Handling Pattern
 
-## Resumen de Paquetes NuGet
+- **Decision**: JSON error body `{ "error": "<message>" }` with appropriate HTTP status codes
+- **Rationale**: Simple, predictable, matches FR-010. No custom middleware needed — return via `Results.BadRequest()` / `Results.NotFound()`.
+- **HTTP codes used**: 200 OK (success), 400 Bad Request (validation errors), 404 Not Found (account missing)
 
-| Paquete | Versión | Propósito |
-|---------|---------|-----------|
-| `Swashbuckle.AspNetCore` | 9.0.x | Swagger UI + generación OpenAPI |
-| `xunit` | 2.9.x | Framework de pruebas (test project) |
-| `Microsoft.NET.Test.Sdk` | 17.x | Test runner (test project) |
-| `coverlet.collector` | 6.x | Cobertura de código (test project) |
+## 6. Consistency Model
 
-Sin otras dependencias externas.
+- **Decision**: Optimistic check-then-act with total balance invariant verified after transfers
+- **Rationale**: Single-threaded Singleton service; no concurrent transfer conflicts in lab scope. ConcurrentDictionary guarantees atomic reads/writes per key.
+- **Invariant**: Sum of all account balances remains constant after each transfer.
+
+## 7. Seed Data
+
+- **Decision**: Three accounts hardcoded on startup in Program.cs
+- **Rationale**: Spec requires ACC-001 ($1000), ACC-002 ($500), ACC-003 ($0). No persistence means re-seeding on every restart is correct behavior.
+
+---
+
+## Dependency Versions
+
+| Dependency | Version | Notes |
+|---|---|---|
+| .NET SDK | 9.0.x | Latest stable |
+| xUnit | 2.9.x | Latest stable |
+| FluentAssertions | 7.0.x | Latest stable |
+| Swashbuckle.AspNetCore | 7.0.x | Latest compatible with .NET 9 |
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| ConcurrentDictionary only guarantees per-key atomicity, not cross-key atomicity | Lock both accounts during transfer (lock ordering by key hash to prevent deadlock) |
+| Swashbuckle v7 API changes from v6 | Pin version, verify OpenAPI endpoint at `/swagger` |
