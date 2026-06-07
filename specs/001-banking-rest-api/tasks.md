@@ -8,7 +8,7 @@
 
 ---
 
-## T001 — Crear proyectos Web API y xUnit
+## T001 — Crear proyectos Web API y xUnit — ✅ COMPLETED
 
 **Descripción**: Inicializar la solución con `dotnet new webapi` y `dotnet new xunit` según la estructura del plan.
 
@@ -22,7 +22,7 @@
 
 ---
 
-## T002 — Modelos y BankingService con seed data y pruebas unitarias
+## T002 — Modelos y BankingService con seed data y pruebas unitarias — ✅ COMPLETED
 
 **Descripción**: Implementar el dominio (modelos Account/TransferRequest, BankingService con validación de negocio y seed data) y sus pruebas unitarias con xUnit.
 
@@ -59,7 +59,7 @@
 
 ---
 
-## T003 — Endpoints Minimal API en Program.cs
+## T003 — Endpoints Minimal API en Program.cs — ✅ COMPLETED
 
 **Descripción**: Registrar `BankingService` como Singleton en DI y definir los 2 endpoints REST.
 
@@ -79,7 +79,7 @@
 
 ---
 
-## T004 — Swagger y validación de arranque
+## T004 — Swagger y validación de arranque — ✅ COMPLETED
 
 **Descripción**: Habilitar Swagger/Swashbuckle y verificar que la API arranca y responde correctamente.
 
